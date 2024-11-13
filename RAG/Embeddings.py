@@ -28,8 +28,10 @@ class BaseEmbeddings:
         return dot_product / magnitude
 
 # 使用MindNLP的SentenceTransformer实现
-class HuggingFaceEmbedding(BaseEmbeddings):
-
+class MindNLPEmbedding(BaseEmbeddings):
+    """
+    class for MindNLP embeddings
+    """
     def __init__(self, path: str = 'BAAI/bge-base-zh-v1.5', is_api: bool = False) -> None:
         super().__init__(path, is_api)
         self._model = self.load_model(path)
@@ -52,7 +54,7 @@ class HuggingFaceEmbedding(BaseEmbeddings):
         return similarity
 
 # 使用MindNLP的Transformers实现
-# class HuggingFaceEmbedding(BaseEmbeddings):
+# class MindNLPEmbedding(BaseEmbeddings):
 #
 #     def __init__(self, path: str = 'BAAI/bge-base-zh-v1.5', is_api: bool = False) -> None:
 #         super().__init__(path, is_api)
@@ -72,5 +74,22 @@ class HuggingFaceEmbedding(BaseEmbeddings):
 #         model = AutoModel.from_pretrained(path)
 #         return model, tokenizer
 
+class OpenAIEmbedding(BaseEmbeddings):
+    """
+    class for OpenAI embeddings
+    """
+    def __init__(self, path: str = '', is_api: bool = True) -> None:
+        super().__init__(path, is_api)
+        if self.is_api:
+            from openai import OpenAI
+            self.client = OpenAI()
+            self.client.api_key = os.getenv("OPENAI_API_KEY")
+            self.client.base_url = os.getenv("OPENAI_BASE_URL")
 
+    def get_embedding(self, text: str, model: str = "text-embedding-3-large") -> List[float]:
+        if self.is_api:
+            text = text.replace("\n", " ")
+            return self.client.embeddings.create(input=[text], model=model).data[0].embedding
+        else:
+            raise NotImplementedError
 

@@ -3,7 +3,7 @@ from typing import Dict, List, Optional, Tuple, Union
 import json
 import numpy as np
 from tqdm import tqdm
-from RAG.Embeddings import BaseEmbeddings, HuggingFaceEmbedding
+from RAG.Embeddings import BaseEmbeddings, MindNLPEmbedding
 
 
 # MindNLP的SentenceTransformer实现
@@ -35,7 +35,7 @@ class VectorStore:
             self.document = json.load(f)
 
         # 查询 EmbeddingModel 的类别
-        if isinstance(EmbeddingModel, HuggingFaceEmbedding):
+        if isinstance(EmbeddingModel, MindNLPEmbedding):
             # 将列表重新变为 numpy.ndarray
             self.vectors = [np.array(vector) for vector in vectors_list]
         else:
