@@ -25,8 +25,8 @@ from RAG.Reranker import MindNLPReranker
 # vector = VectorStore()
 # embedding = MindNLPEmbedding("BAAI/bge-base-zh-v1.5") # 创建EmbeddingModel
 # vector.load_vector(EmbeddingModel=embedding, path='./storage')  # 加载本地的数据库
-# question = '逆向纠错的原理是什么？'
-# content = vector.query(question, EmbeddingModel=embedding, k=1)[0]
+# question = 'git如何新建分支？'
+# content = vector.query(question, EmbeddingModel=embedding, k=3)[0]
 # print(content)
 # chat = MindNLPChat(path='openbmb/MiniCPM-2B-dpo-bf16')
 # print(chat.chat(question, [], content))
@@ -35,7 +35,7 @@ from RAG.Reranker import MindNLPReranker
 # rerank
 # 未创建向量数据库、更换数据集、或更换其他Embeddings模型后将have_created_db设置为False
 # 运行一次成功创建向量数据库后可以将have_created_db设置为True
-have_created_db = True
+have_created_db = False
 embedding = MindNLPEmbedding("BAAI/bge-base-zh-v1.5") # 创建EmbeddingModel
 
 # 创建RerankerModel
@@ -52,7 +52,7 @@ else:
     vector.get_vector(EmbeddingModel=embedding)
     vector.persist(path='storage')  # 将向量和文档内容保存到storage目录下，下次再用就可以直接加载本地的数据库
 
-question = '远程仓库的协作与贡献有哪些？'
+question = 'git如何新建分支？'
 
 # 从向量数据库中查询出最相似的3个文档
 content = vector.query(question, EmbeddingModel=embedding, k=3)
@@ -62,6 +62,6 @@ rerank_content = reranker.rerank(question, content, k=2)
 print(rerank_content)
 # 最后选择最相似的文档, 交给LLM作为可参考上下文
 best_content = rerank_content[0]
-chat = MindNLPChat(path='openbmb/MiniCPM-2B-dpo-bf16')
+chat = MindNLPChat(path='THUDM/chatglm-6b')
 print(chat.chat(question, [], best_content))
 
