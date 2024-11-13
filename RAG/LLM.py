@@ -66,5 +66,5 @@ class MindNLPChat(BaseModel):
     def load_model(self):
         import mindspore
         from mindnlp.transformers import AutoTokenizer, AutoModelForCausalLM
-        self.tokenizer = AutoTokenizer.from_pretrained(self.path)
-        self.model = AutoModelForCausalLM.from_pretrained(self.path, ms_dtype=mindspore.float16)
+        self.tokenizer = AutoTokenizer.from_pretrained(self.path, mirror="huggingface")
+        self.model = AutoModelForCausalLM.from_pretrained(self.path, ms_dtype=mindspore.float16, mirror="huggingface")
