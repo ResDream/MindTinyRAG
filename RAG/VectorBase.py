@@ -1,95 +1,103 @@
 import os
-from copy import copy
 from typing import Dict, List, Optional, Tuple, Union
+import json
 import numpy as np
+from tqdm import tqdm
+from RAG.Embeddings import BaseEmbeddings, MindNLPEmbedding
 
 
-class BaseEmbeddings:
-    """
-    Base class for embeddings
-    """
+# MindNLP的SentenceTransformer实现
+class VectorStore:
+    def __init__(self, document: List[str] = ['']) -> None:
+        self.document = document
 
-    def __init__(self, path: str, is_api: bool) -> None:
-        self.path = path
-        self.is_api = is_api
+    def get_vector(self, EmbeddingModel: BaseEmbeddings):
+        self.vectors = []
+        for doc in tqdm(self.document, desc="Calculating embeddings"):
+            self.vectors.append(EmbeddingModel.get_embedding(doc))
+        return self.vectors
 
-    def get_embedding(self, text: str, model: str) -> List[float]:
-        raise NotImplementedError
+    def persist(self, path: str = 'storage'):
+        if not os.path.exists(path):
+            os.makedirs(path)
+        with open(f"{path}/document.json", 'w', encoding='utf-8') as f:
+            json.dump(self.document, f, ensure_ascii=False)
+        if self.vectors:
+            # 将 numpy.ndarray 转换为列表
+            vectors_list = [vector.tolist() for vector in self.vectors]
+            with open(f"{path}/vectors.json", 'w', encoding='utf-8') as f:
+                json.dump(vectors_list, f)
 
-    @classmethod
-    def cosine_similarity(cls, vector1: List[float], vector2: List[float]) -> float:
-        """
-        calculate cosine similarity between two vectors
-        """
-        dot_product = np.dot(vector1, vector2)
-        magnitude = np.linalg.norm(vector1) * np.linalg.norm(vector2)
-        if not magnitude:
-            return 0
-        return dot_product / magnitude
+    def load_vector(self, EmbeddingModel: BaseEmbeddings, path: str = 'storage'):
+        with open(f"{path}/vectors.json", 'r', encoding='utf-8') as f:
+            vectors_list = json.load(f)
+        with open(f"{path}/document.json", 'r', encoding='utf-8') as f:
+            self.document = json.load(f)
 
-# 使用MindNLP的SentenceTransformer实现
-class MindNLPEmbedding(BaseEmbeddings):
-    """
-    class for MindNLP embeddings
-    """
-    def __init__(self, path: str = 'BAAI/bge-base-zh-v1.5', is_api: bool = False) -> None:
-        super().__init__(path, is_api)
-        self._model = self.load_model(path)
-
-    def get_embedding(self, text: str):
-        sentence_embedding = self._model.encode([text], normalize_embeddings=True)
-        return sentence_embedding
-
-    def load_model(self, path: str):
-        from mindnlp.sentence import SentenceTransformer
-        model = SentenceTransformer(path, mirror="huggingface")
-        return model
-
-    @classmethod
-    def cosine_similarity(cls, sentence_embedding_1, sentence_embedding_2):
-        """
-        calculate cosine similarity between two vectors
-        """
-        similarity = sentence_embedding_1 @ sentence_embedding_2.T
-        return similarity
-
-# 使用MindNLP的Transformers实现
-# class MindNLPEmbedding(BaseEmbeddings):
-#
-#     def __init__(self, path: str = 'BAAI/bge-base-zh-v1.5', is_api: bool = False) -> None:
-#         super().__init__(path, is_api)
-#         self._model, self._tokenizer = self.load_model(path)
-#
-#     def get_embedding(self, text: str) -> List[float]:
-#         encoded_input = self._tokenizer([text], padding=True, truncation=True, return_tensors="ms")
-#         model_output = self._model(**encoded_input)
-#         sentence_embeddings = model_output[0][:, 0]
-#         norm = sentence_embeddings.norm(ord=2, dim=1, keepdim=True)
-#         normalized_sentence_embeddings = sentence_embeddings / norm
-#         return normalized_sentence_embeddings[0].tolist()
-#
-#     def load_model(self, path: str):
-#         from mindnlp.transformers import AutoModel, AutoTokenizer
-#         tokenizer = AutoTokenizer.from_pretrained(path)
-#         model = AutoModel.from_pretrained(path)
-#         return model, tokenizer
-
-class OpenAIEmbedding(BaseEmbeddings):
-    """
-    class for OpenAI embeddings
-    """
-    def __init__(self, path: str = '', is_api: bool = True) -> None:
-        super().__init__(path, is_api)
-        if self.is_api:
-            from openai import OpenAI
-            self.client = OpenAI()
-            self.client.api_key = os.getenv("OPENAI_API_KEY")
-            self.client.base_url = os.getenv("OPENAI_BASE_URL")
-
-    def get_embedding(self, text: str, model: str = "text-embedding-3-large") -> List[float]:
-        if self.is_api:
-            text = text.replace("\n", " ")
-            return self.client.embeddings.create(input=[text], model=model).data[0].embedding
+        # 查询 EmbeddingModel 的类别
+        if isinstance(EmbeddingModel, MindNLPEmbedding):
+            # 将列表重新变为 numpy.ndarray
+            self.vectors = [np.array(vector) for vector in vectors_list]
         else:
-            raise NotImplementedError
+            self.vectors = vectors_list
 
+    def get_similarity(self, vector1, vector2, EmbeddingModel: BaseEmbeddings):
+        return EmbeddingModel.cosine_similarity(vector1, vector2)
+
+    def query(self, query: str, EmbeddingModel: BaseEmbeddings, k: int = 1):
+        # 获取查询字符串的嵌入向量
+        query_vector = EmbeddingModel.get_embedding(query)
+
+        # 计算查询向量与数据库中每个向量的相似度
+        similarities = [self.get_similarity(query_vector, vector, EmbeddingModel) for vector in self.vectors]
+
+        # 将相似度、向量和文档存储在一个列表中
+        results = []
+        for similarity, vector, document in zip(similarities, self.vectors, self.document):
+            results.append({
+                'similarity': similarity,
+                'vector': vector,
+                'document': document
+            })
+        # 按相似度从高到低排序
+        results.sort(key=lambda x: x['similarity'], reverse=True)
+        # 获取最相似的 k 个文档
+        top_k_documents = [result['document'] for result in results[:k]]
+
+        return top_k_documents
+
+# MindNLP的Transformers库实现
+# class VectorStore:
+#     def __init__(self, document: List[str] = ['']) -> None:
+#         self.document = document
+#
+#     def get_vector(self, EmbeddingModel: BaseEmbeddings) -> List[List[float]]:
+#
+#         self.vectors = []
+#         for doc in tqdm(self.document, desc="Calculating embeddings"):
+#             self.vectors.append(EmbeddingModel.get_embedding(doc))
+#         return self.vectors
+#
+#     def persist(self, EmbeddingModel: BaseEmbeddings, path: str = 'storage'):
+#         if not os.path.exists(path):
+#             os.makedirs(path)
+#         with open(f"{path}/doecment.json", 'w', encoding='utf-8') as f:
+#             json.dump(self.document, f, ensure_ascii=False)
+#         if self.vectors:
+#             with open(f"{path}/vectors.json", 'w', encoding='utf-8') as f:
+#                 json.dump(self.vectors, f)
+#
+#     def load_vector(self, path: str = 'storage'):
+#         with open(f"{path}/vectors.json", 'r', encoding='utf-8') as f:
+#             self.vectors = json.load(f)
+#         with open(f"{path}/doecment.json", 'r', encoding='utf-8') as f:
+#             self.document = json.load(f)
+#
+#     def get_similarity(self, vector1: List[float], vector2: List[float]) -> float:
+#         return BaseEmbeddings.cosine_similarity(vector1, vector2)
+#
+#     def query(self, query: str, EmbeddingModel: BaseEmbeddings, k: int = 1) -> List[str]:
+#         query_vector = EmbeddingModel.get_embedding(query)
+#         result = np.array([self.get_similarity(query_vector, vector)
+#                           for vector in self.vectors])
+#         return np.array(self.document)[result.argsort()[-k:][::-1]].tolist()
