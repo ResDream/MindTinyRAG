@@ -1,3 +1,9 @@
+# 在服务器上使用gradio准备：
+# mv frpc_linux_aarch64_v0.2 /home/ma-user/anaconda3/envs/MindSpore/lib/python3.9/site-packages/gradio
+# cd /home/ma-user/anaconda3/envs/MindSpore/lib/python3.9/site-packages/gradi
+# chmod +x frpc_linux_aarch64_v0.2
+
+
 import gradio as gr
 from typing import List, Dict
 import os
