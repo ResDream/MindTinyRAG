@@ -62,6 +62,6 @@ rerank_content = reranker.rerank(question, content, k=2)
 print(rerank_content)
 # 最后选择最相似的文档, 交给LLM作为可参考上下文
 best_content = rerank_content[0]
-chat = MindNLPChat(path='THUDM/chatglm-6b')
+chat = MindNLPChat(path='openbmb/MiniCPM-2B-dpo-bf16')
 print(chat.chat(question, [], best_content))
 

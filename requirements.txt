@@ -4,3 +4,4 @@ beautifulsoup4~=4.12.3
 PyPDF2~=3.0.1
 markdown~=3.7
 tiktoken~=0.8.0
+gradio
